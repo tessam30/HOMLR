@@ -90,3 +90,58 @@ count(apply_2_training, Neighborhood) %>%
 # Dummy Encoding
 recipe(Sale_Price ~ ., data = ames_train) %>% 
   step_dummy(all_nominal(), one_hot = TRUE)
+
+
+# Application ----
+# Steps: 1) Near-zero variance removed
+# 2) Ordinal encode quality based features
+# 3) Center and scale
+# 4) dimension reduction
+
+blueprint <- recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_nzv(all_nominal())  %>%
+  step_integer(matches("Qual|Cond|QC|Qu")) %>%
+  step_center(all_numeric(), -all_outcomes()) %>%
+  step_scale(all_numeric(), -all_outcomes()) %>%
+  step_pca(all_numeric(), -all_outcomes())
+blueprint
+
+
+prepare <- prep(blueprint, training = ames_train)
+
+baked_train <- bake(prepare, new_data = ames_train)
+baked_test <- bake(prepare, new_data = ames_test)
+baked_train
+
+
+# within each resample iteration we want to apply prep() and bake() to our resample training and validation data.
+blueprint <- recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_nzv(all_nominal()) %>%
+  step_integer(matches("Qual|Cond|QC|Qu")) %>%
+  step_center(all_numeric(), -all_outcomes()) %>%
+  step_scale(all_numeric(), -all_outcomes()) %>%
+  step_dummy(all_nominal(), -all_outcomes(), one_hot = TRUE)
+
+
+# Specify resampling plan
+cv <- trainControl(
+  method = "repeatedcv", 
+  number = 10, 
+  repeats = 5
+)
+
+# Construct grid of hyperparameter values
+hyper_grid <- expand.grid(k = seq(2, 25, by = 1))
+
+# Tune a knn model using grid search
+knn_fit2 <- train(
+  blueprint, 
+  data = ames_train, 
+  method = "knn", 
+  trControl = cv, 
+  tuneGrid = hyper_grid,
+  metric = "RMSE"
+)
+
+knn_fit2
+ggplot(knn_fit2)
